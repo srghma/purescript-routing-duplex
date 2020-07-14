@@ -6,8 +6,9 @@ import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.String.Gen (genAlphaString)
+import Data.Variant (Variant)
 import Effect (Effect)
-import Routing.Duplex (RouteDuplex', flag, int, param, parse, print, record, rest, root, segment, string, (:=))
+import Routing.Duplex (RouteDuplex', flag, int, param, parse, prefix, print, record, rest, root, segment, string, variant, (%=), (:=))
 import Routing.Duplex.Generic (noArgs)
 import Routing.Duplex.Generic as RDG
 import Routing.Duplex.Generic.Syntax ((/), (?))
@@ -21,6 +22,7 @@ data TestRoute
   | Foo String Int String { a :: String, b :: Boolean }
   | Bar { id :: String, search :: String }
   | Baz String (Array String)
+  | Qux (Variant (id :: String, search :: String, list :: Unit))
 
 derive instance eqTestRoute :: Eq TestRoute
 derive instance genericTestRoute :: Generic TestRoute _
@@ -43,6 +45,7 @@ genTestRoute = do
 
 _id = Proxy :: Proxy "id"
 _search = Proxy :: Proxy "search"
+_list = Proxy :: Proxy "list"
 
 route :: RouteDuplex' TestRoute
 route =
@@ -51,6 +54,7 @@ route =
     , "Foo": fooRoute
     , "Bar": barRoute
     , "Baz": bazRoute
+    , "Qux": quxRoute
     }
   where
   fooRoute =
@@ -63,6 +67,12 @@ route =
 
   bazRoute =
     segment / rest
+
+  quxRoute =
+    variant
+      # _list %= pure unit
+      # _id %= segment
+      # _search %= prefix "search" segment
 
 main :: Effect Unit
 main = do

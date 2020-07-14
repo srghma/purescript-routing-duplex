@@ -24,6 +24,9 @@ module Routing.Duplex
   , record
   , prop
   , (:=)
+  , variant
+  , vcase
+  , (%=)
   , params
   , buildParams
   , class RouteDuplexParams
@@ -32,7 +35,7 @@ module Routing.Duplex
 
 import Prelude
 
-import Control.Alt (class Alt)
+import Control.Alt (class Alt, (<|>))
 import Control.Alternative (class Alternative)
 import Data.Either (Either)
 import Data.Foldable (class Foldable, foldMap, foldr)
@@ -41,14 +44,17 @@ import Data.Profunctor (class Profunctor)
 import Data.String (Pattern(..))
 import Data.String as String
 import Data.Symbol (class IsSymbol, reflectSymbol)
+import Data.Variant (Variant)
+import Data.Variant as Variant
 import Prim.Row as Row
 import Prim.RowList (class RowToList, Cons, Nil, RowList)
 import Record as Record
-import Routing.Duplex.Parser (RouteParser)
+import Routing.Duplex.Parser (RouteError(..), RouteParser(..), RouteResult(..))
 import Routing.Duplex.Parser as Parser
 import Routing.Duplex.Printer (RoutePrinter)
 import Routing.Duplex.Printer as Printer
 import Type.Proxy (Proxy(..))
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | The core abstraction of this library. The values of this type can be used both for parsing
 -- | values of type `o` from `String` as well as printing values of type `i` into `String`.
@@ -338,6 +344,46 @@ prop sym (RouteDuplex f g) (RouteDuplex x y) =
   RouteDuplex (\r -> x r <> f (Record.get sym r)) (flip (Record.insert sym) <$> y <*> g)
 
 infix 2 prop as :=
+
+-- | Combined with `vcase`, builds a Variant where the order of parsing and
+-- | printing matters. As in the example below, the later `vcase`s take priority
+-- | when parsing/printing:
+-- |
+-- | ```purescript
+-- | userRoutes =
+-- |   variant
+-- |     # vcase (Proxy :: _ "list") (pure unit)
+-- |     # vcase (Proxy :: _ "edit") (str segment)
+-- |     # vcase (Proxy :: _ "new") (path "new" $ pure unit)
+-- | ```
+variant :: forall r. RouteDuplex r (Variant ())
+variant = RouteDuplex mempty (Chomp \_ -> Fail EndOfPath)
+
+-- | Parse/print a single case of a variant. Must be used with `variant`.
+vcase
+  :: forall sym a b r1 r1_ r2 r3
+   . IsSymbol sym
+  => Row.Cons sym a r1_ r1
+  => Row.Cons sym b r2 r3
+  => Row.Lacks sym r2
+  => Proxy sym
+  -> RouteDuplex a b
+  -> RouteDuplex (Variant r1_) (Variant r2)
+  -> RouteDuplex (Variant r1) (Variant r3)
+vcase sym (RouteDuplex enc_a dec_b) (RouteDuplex enc_r1 dec_r2) =
+  RouteDuplex (Variant.on sym enc_a enc_r1) (Variant.inj sym <$> dec_b <|> expand1 sym <$> dec_r2)
+  where
+  -- A variant of `Data.Variant.expand` is used in order to avoid adding a
+  -- redundant `Row.Union` constraint to `vcase`.
+  expand1
+    :: forall sym' lt x gt
+     . Row.Cons sym' x lt gt
+    => Proxy sym'
+    -> Variant lt
+    -> Variant gt
+  expand1 _ = unsafeCoerce
+
+infix 2 vcase as %=
 
 class RouteDuplexParams (r1 :: Row Type) (r2 :: Row Type) | r1 -> r2 where
   -- | Builds a `RouteDuplex` from a record of query parameter parsers/printers, where
