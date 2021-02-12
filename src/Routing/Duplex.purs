@@ -48,7 +48,7 @@ import Data.Variant as Variant
 import Prim.Row as Row
 import Prim.RowList (RowList, class RowToList, Cons, Nil)
 import Record as Record
-import Routing.Duplex.Parser (RouteParser)
+import Routing.Duplex.Parser (RouteError(..), RouteParser(..), RouteResult(..))
 import Routing.Duplex.Parser as Parser
 import Routing.Duplex.Printer (PrintPathError, RoutePrinter)
 import Routing.Duplex.Printer as Printer
