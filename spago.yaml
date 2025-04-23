@@ -1,0 +1,34 @@
+package:
+  name: routing-duplex
+  publish:
+    license: MIT
+    version: 0.7.0
+    location:
+      githubOwner: purescript-contrib
+      githubRepo: purescript-routing-duplex
+  dependencies:
+    - arrays
+    - control
+    - either
+    - foldable-traversable
+    - integers
+    - js-uri
+    - lazy
+    - maybe
+    - newtype
+    - prelude
+    - profunctor
+    - record
+    - strings
+    - tuples
+    - variant
+  test:
+    main: Test.Main
+    dependencies:
+      - assert
+      - effect
+      - quickcheck
+workspace:
+  packageSet:
+    registry: 64.3.0
+  extraPackages: {}
