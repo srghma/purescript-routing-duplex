@@ -26,9 +26,12 @@ module Routing.Duplex
   , (:=)
   , variant
   , vcase
+  , vmatch
+  , vmatchCases
   , (%=)
   , params
   , buildParams
+  , class RouteDuplexVariantMatchCases
   , class RouteDuplexParams
   , class RouteDuplexBuildParams
   ) where
@@ -353,8 +356,17 @@ infix 2 prop as :=
 -- | userRoutes =
 -- |   variant
 -- |     # vcase (Proxy :: _ "list") (pure unit)
--- |     # vcase (Proxy :: _ "edit") (str segment)
+-- |     # vcase (Proxy :: _ "edit") (string segment)
 -- |     # vcase (Proxy :: _ "new") (path "new" $ pure unit)
+-- | ```
+-- | or
+-- |
+-- | ```purescript
+-- | userRoutes =
+-- |   variant
+-- |     # (Proxy :: _ "list") %= (pure unit)
+-- |     # (Proxy :: _ "edit") %= (string segment)
+-- |     # (Proxy :: _ "new") %= (path "new" $ pure unit)
 -- | ```
 variant :: forall r. RouteDuplex r (Variant ())
 variant = RouteDuplex mempty (Chomp \_ -> Fail EndOfPath)
@@ -384,6 +396,45 @@ vcase sym (RouteDuplex enc_a dec_b) (RouteDuplex enc_r1 dec_r2) =
   expand1 _ = unsafeCoerce
 
 infix 2 vcase as %=
+
+-- | Match a variant with a record of route duplexes, one for each case.
+-- |
+-- | We append `rN_` to key names to enforce correct ordering. (To learn more read ["About ordering" section in README](#about-ordering))
+-- |
+-- | ```purescript
+-- | vmatch
+-- |   { r1_new: path "new" $ pure unit
+-- |   , r2_edit: string segment
+-- |   , r3_list: pure unit
+-- |   }
+-- | ```
+vmatch
+  :: forall r rl rx
+   . RowToList r rl
+  => RouteDuplexVariantMatchCases rl r rx
+  => Record r
+  -> RouteDuplex' (Variant rx)
+vmatch = vmatchCases (Proxy :: Proxy rl)
+
+class RouteDuplexVariantMatchCases (rl :: RowList Type) (r :: Row Type) (rx :: Row Type) | rl -> r rx where
+  vmatchCases :: Proxy rl -> Record r -> RouteDuplex' (Variant rx)
+
+instance matchCasesNil :: RouteDuplexVariantMatchCases Nil r () where
+  vmatchCases _ _ = variant
+
+instance matchCasesCons ::
+  ( IsSymbol sym
+  , Row.Cons sym (RouteDuplex' a) r' r
+  , Row.Cons sym a rx' rx
+  , Row.Lacks sym rx'
+  , RouteDuplexVariantMatchCases rest r rx'
+  ) =>
+  RouteDuplexVariantMatchCases (Cons sym (RouteDuplex' a) rest) r rx where
+  vmatchCases _ r =
+    vcase
+      (Proxy :: Proxy sym)
+      (Record.get (Proxy :: Proxy sym) r :: RouteDuplex' a)
+      (vmatchCases (Proxy :: Proxy rest) r)
 
 class RouteDuplexParams (r1 :: Row Type) (r2 :: Row Type) | r1 -> r2 where
   -- | Builds a `RouteDuplex` from a record of query parameter parsers/printers, where
